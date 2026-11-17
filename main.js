@@ -4,13 +4,19 @@ const themed = [...document.querySelectorAll('main [data-theme], footer[data-the
 function syncHeader() {
   const s = themed.find(s => { const r = s.getBoundingClientRect(); return r.top <= 60 && r.bottom > 60; });
   if (s) hdr.dataset.theme = s.dataset.theme;
+  hdr.classList.toggle('solid', scrollY > 8);
 }
-addEventListener('scroll', syncHeader, { passive: true });
+let ticking = false;   // one header check per frame, not per scroll event
+addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(() => { ticking = false; syncHeader(); }); } }, { passive: true });
 addEventListener('resize', syncHeader);
 syncHeader();
 
 // Close the mobile menu after picking a link.
 document.querySelectorAll('.menu a').forEach(a => a.addEventListener('click', () => a.closest('details').open = false));
+// Tapping the dimmed page behind the phone menu closes it.
+const menu = document.querySelector('.menu');
+document.addEventListener('click', e => { if (menu.open && !menu.contains(e.target)) menu.open = false; });
+menu.addEventListener('click', e => { if (e.target === menu) menu.open = false; });   // the dimmed area is the menu's own ::before
 
 // ---------- Contact panel: every Contact / Get in touch control opens it ----------
 const talk = document.querySelector('.talk');
@@ -28,7 +34,7 @@ const GL = !!window.THREE && (() => { try { return !!document.createElement('can
 
 function stage(canvas) {
   const r = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-  r.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  r.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5));
   const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(30, 1, .1, 100);
   cam.position.z = 14;   // visible height at z=0 is 7.5 units
   scene.add(new THREE.HemisphereLight(0xffffff, 0x929da7, 1.050));
@@ -59,6 +65,7 @@ function makeVial() {
 // Everything below is enhancement: the page is complete and readable without it.
 if (window.gsap && window.ScrollTrigger) {
   gsap.registerPlugin(ScrollTrigger);
+  ScrollTrigger.config({ ignoreMobileResize: true });   // no jump when the phone address bar hides
 
   // Split [data-split] paragraphs into words for the scroll-driven reveal.
   document.querySelectorAll('[data-split]').forEach(p => {
@@ -68,24 +75,14 @@ if (window.gsap && window.ScrollTrigger) {
   const mm = gsap.matchMedia();
 
   mm.add('(prefers-reduced-motion: no-preference)', () => {
-    let killLenis;
-    if (window.Lenis) {
-      const lenis = new Lenis({ anchors: true, lerp: .085 });
-      lenis.on('scroll', ScrollTrigger.update);
-      const raf = t => lenis.raf(t * 1000);
-      gsap.ticker.add(raf);
-      gsap.ticker.lagSmoothing(0);
-      killLenis = () => { gsap.ticker.remove(raf); lenis.destroy(); };
-    }
-
-    gsap.utils.toArray('.reveal').forEach(el => gsap.from(el, {
-      autoAlpha: 0, y: 24, duration: 1, ease: 'power3.out',
-      scrollTrigger: { trigger: el, start: 'top 92%' }
-    }));
+    // Items entering together (cards, table rows) glide in one after another.
+    gsap.set('.reveal', { autoAlpha: 0, y: 40 });
+    ScrollTrigger.batch('.reveal', {
+      start: 'top 92%', once: true,
+      onEnter: els => gsap.to(els, { autoAlpha: 1, y: 0, duration: 1.4, ease: 'expo.out', stagger: .09, overwrite: true })
+    });
     gsap.to('.lens', { yPercent: 30, ease: 'none', scrollTrigger: { trigger: '.life-hero', start: 'top bottom', end: 'bottom top', scrub: true } });
     gsap.from('.partner .tube', { yPercent: 60, ease: 'none', scrollTrigger: { trigger: '.partner', start: 'top bottom', end: 'bottom bottom', scrub: true } });
-
-    return () => killLenis && killLenis();
   });
 
   // Pinned, scrubbed sections: desktop only.
@@ -123,7 +120,7 @@ if (window.gsap && window.ScrollTrigger) {
       heroStage.draw();
     };
     const heroTl = gsap.timeline({ defaults: { ease: 'power2.inOut' }, scrollTrigger: {
-      trigger: '.hero-pin', start: 'top top', end: '+=430%', pin: true, scrub: 1.200, onUpdate: renderHero, onRefresh: renderHero
+      trigger: '.hero-pin', start: 'top top', end: '+=430%', pin: true, scrub: .6, onUpdate: renderHero, onRefresh: renderHero
     } })
       .to(st, { s: 2.700, ty: 0, duration: .24 }, 0)
       .to('.hero-copy', { autoAlpha: 0, yPercent: -30, duration: .16 }, 0)
@@ -155,7 +152,7 @@ if (window.gsap && window.ScrollTrigger) {
       knowCv.style.filter = k.blur > .3 ? `blur(${k.blur}px)` : 'none';
       knowStage.draw();
     };
-    gsap.timeline({ scrollTrigger: { trigger: '.know-pin', start: 'top top', end: '+=200%', pin: true, scrub: 1, onUpdate: renderKnow, onRefresh: renderKnow } })
+    gsap.timeline({ scrollTrigger: { trigger: '.know-pin', start: 'top top', end: '+=200%', pin: true, scrub: .6, onUpdate: renderKnow, onRefresh: renderKnow } })
       .to(k, { blur: 0, ry: 0, duration: .3 }, 0)
       .from('.s1 .w', { opacity: .12, stagger: .02, duration: .05 }, 0)
       .to('.s1', { autoAlpha: 0, y: -40, duration: .12 }, '+=.1')
