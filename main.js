@@ -25,11 +25,15 @@ talk.querySelector('.talk-x').addEventListener('click', () => talk.close());
 talk.addEventListener('click', e => { if (e.target === talk) talk.close(); });   // click on the backdrop
 talk.querySelector('form').addEventListener('submit', e => {
   e.preventDefault();
-  // ponytail: no inbox or form endpoint supplied yet. Post the FormData to one here when the client provides it.
-  talk.querySelector('.note').textContent = 'This form is not connected to an inbox yet.';
+  // ponytail: opens the visitor's mail app. Swap for a form service (Formspree etc.) once contact@lysigenbiotix.com is live.
+  const f = new FormData(e.target);
+  const body = `${f.get('message')}\n\n${f.get('first')} ${f.get('last')}\n${f.get('company')}\n${f.get('phone')}\n${f.get('email')}`;
+  location.href = `mailto:contact@lysigenbiotix.com?subject=${encodeURIComponent('Website enquiry: ' + f.get('subject'))}&body=${encodeURIComponent(body)}`;
+  talk.querySelector('.note').textContent = 'Opening your email app. If nothing happens, write to contact@lysigenbiotix.com.';
 });
 
 // ---------- 3D helpers (three.js). Scenes render only when scroll changes them. ----------
+const cssColor = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();   // palette tokens from styles.css
 const GL = !!window.THREE && (() => { try { return !!document.createElement('canvas').getContext('webgl'); } catch { return false; } })();
 
 function stage(canvas) {
@@ -39,7 +43,7 @@ function stage(canvas) {
   cam.position.z = 14;   // visible height at z=0 is 7.5 units
   scene.add(new THREE.HemisphereLight(0xffffff, 0x929da7, 1.050));
   const key = new THREE.DirectionalLight(0xffffff, .9); key.position.set(4, 6, 8); scene.add(key);
-  const rim = new THREE.DirectionalLight(0xffc9bf, .5); rim.position.set(-6, 2, -4); scene.add(rim);
+  const rim = new THREE.DirectionalLight(cssColor('--coral-ll'), .5); rim.position.set(-6, 2, -4); scene.add(rim);
   let w = 0, h = 0;
   return { scene, kill: () => r.dispose(), draw() {
     const cw = canvas.clientWidth, ch = canvas.clientHeight;
@@ -53,12 +57,12 @@ function stage(canvas) {
 function makeVial() {
   const g = new THREE.Group(), V = (x, y) => new THREE.Vector2(x, y);
   const add = (geo, mat, y = 0, order = 0) => { const m = new THREE.Mesh(geo, mat); m.position.y = y - 2.050; m.renderOrder = order; g.add(m); };
-  add(new THREE.CylinderGeometry(.96, .96, 1.900, 48), new THREE.MeshPhongMaterial({ color: 0xff4b32, transparent: true, opacity: .55, shininess: 80 }), 1.050);
+  add(new THREE.CylinderGeometry(.96, .96, 1.900, 48), new THREE.MeshPhongMaterial({ color: cssColor('--coral'), transparent: true, opacity: .55, shininess: 80 }), 1.050);
   add(new THREE.CylinderGeometry(1.070, 1.070, 1.450, 48, 1, true), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .55, side: THREE.DoubleSide }), 1.350, 1);
   add(new THREE.LatheGeometry([V(0, 0), V(.95, 0), V(1.050, .1), V(1.050, 2.600), V(.9, 2.950), V(.55, 3.150), V(.55, 3.450), V(.68, 3.500), V(.68, 3.650)], 64),
     new THREE.MeshPhongMaterial({ color: 0xe6eaee, transparent: true, opacity: .3, shininess: 140, specular: 0xffffff, side: THREE.DoubleSide, depthWrite: false }), 0, 2);
   add(new THREE.CylinderGeometry(.74, .74, .42, 48), new THREE.MeshStandardMaterial({ color: 0xd5dbe6, metalness: .55, roughness: .28 }), 3.620, 3);
-  add(new THREE.CylinderGeometry(.79, .79, .3, 48), new THREE.MeshStandardMaterial({ color: 0x17191c, roughness: .35 }), 3.960, 3);
+  add(new THREE.CylinderGeometry(.79, .79, .3, 48), new THREE.MeshStandardMaterial({ color: cssColor('--ink'), roughness: .35 }), 3.960, 3);
   return g;
 }
 
@@ -170,7 +174,7 @@ if (window.gsap && window.ScrollTrigger) {
       helix = new THREE.Group(); helixStage.scene.add(helix);
       const geo = new THREE.CylinderGeometry(.11, .11, 3.400, 20).rotateZ(Math.PI / 2);
       const mat = new THREE.MeshStandardMaterial({ color: 0xf4f7fc, metalness: .25, roughness: .22 });
-      const tip = new THREE.MeshStandardMaterial({ color: 0xff4b32, roughness: .4 });
+      const tip = new THREE.MeshStandardMaterial({ color: cssColor('--coral'), roughness: .4 });
       for (let i = -11; i <= 11; i++) {
         const rod = new THREE.Mesh(geo, i % 6 === 0 ? tip : mat);
         rod.position.y = i * .27; helix.add(rod); rods.push(rod);
@@ -208,3 +212,6 @@ if (window.gsap && window.ScrollTrigger) {
   ScrollTrigger.sort();
   ScrollTrigger.refresh();
 }
+
+// Design-option switcher (only shown when the URL has ?option=).
+document.querySelector(`.palette a[href="?option=${document.documentElement.dataset.palette}"]`)?.setAttribute('aria-current', 'true');
