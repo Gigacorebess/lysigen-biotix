@@ -241,7 +241,7 @@ if (window.gsap && window.ScrollTrigger) {
       current = i;
       sets.forEach(set => set.forEach((el, n) => el.classList.toggle('is-active', n === i)));
     };
-    ScrollTrigger.create({ trigger: '.pillars-pin', start: 'top top', end: '+=260%', pin: true, onUpdate: renderPillars, onRefresh: renderPillars });
+    ScrollTrigger.create({ trigger: '.pillars-pin', start: 'top top', end: '+=120%', pin: true, onUpdate: renderPillars, onRefresh: renderPillars });
 
     return () => {
       root.classList.remove('motion', 'gl');
