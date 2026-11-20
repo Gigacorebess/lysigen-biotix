@@ -36,23 +36,62 @@ talk.querySelector('form').addEventListener('submit', e => {
 
 // ---------- 3D helpers (three.js). Scenes render only when scroll changes them. ----------
 const cssColor = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();   // palette tokens from styles.css
-const GL = !!window.THREE && (() => { try { return !!document.createElement('canvas').getContext('webgl'); } catch { return false; } })();
+// Each scene owns its WebGL resources. Resizing across the layout breakpoint releases them.
+const GL = !!window.THREE && (() => {
+  const probe = document.createElement('canvas').getContext('webgl');
+  probe?.getExtension('WEBGL_lose_context')?.loseContext();
+  return !!probe;
+})();
 
 function stage(canvas) {
-  const r = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  const r = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' });
   r.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5));
   const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(30, 1, .1, 100);
-  cam.position.z = 14;   // visible height at z=0 is 7.5 units
+  cam.position.z = 14;
   scene.add(new THREE.HemisphereLight(0xffffff, 0x929da7, 1.050));
-  const key = new THREE.DirectionalLight(0xffffff, .9); key.position.set(4, 6, 8); scene.add(key);
-  const rim = new THREE.DirectionalLight(cssColor('--coral-ll'), .5); rim.position.set(-6, 2, -4); scene.add(rim);
+  const key = new THREE.DirectionalLight(0xffffff, .9);
+  key.position.set(4, 6, 8);
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(cssColor('--coral-ll'), .5);   // pink glints on glass, as in the reference video
+  rim.position.set(-6, 2, -4);
+  scene.add(rim);
   let w = 0, h = 0;
-  return { scene, kill: () => r.dispose(), draw() {
-    const cw = canvas.clientWidth, ch = canvas.clientHeight;
-    if (!cw || !ch) return;
-    if (cw !== w || ch !== h) { w = cw; h = ch; r.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); }
+  function draw() {
+    if (!canvas.clientWidth || !canvas.clientHeight) return;
+    if (canvas.clientWidth !== w || canvas.clientHeight !== h) {
+      w = canvas.clientWidth; h = canvas.clientHeight;
+      r.setSize(w, h, false);
+      cam.aspect = w / h;
+      cam.updateProjectionMatrix();
+    }
+    if (r.getContext().isContextLost()) return false;
     r.render(scene, cam);
-  } };
+    return true;
+  }
+  function kill() {
+    const resources = new Set();
+    scene.traverse(obj => {
+      if (!obj.isMesh) return;
+      resources.add(obj.geometry);
+      resources.add(obj.material);
+      if (obj.material.map) resources.add(obj.material.map);
+    });
+    resources.forEach(resource => resource.dispose());
+    r.dispose();
+  }
+  return { scene, draw, kill };
+}
+
+function vialLabel() {
+  const label = document.createElement('canvas');
+  label.width = 512; label.height = 224;
+  const ctx = label.getContext('2d');
+  ctx.fillStyle = '#f3f8f6'; ctx.fillRect(0, 0, 512, 224);
+  ctx.fillStyle = cssColor('--accent-d'); ctx.fillRect(0, 188, 512, 36);
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 54px Arial'; ctx.fillText('lysigen', 256, 103);
+  ctx.font = '26px Arial'; ctx.fillText('B I O T I X', 256, 149);
+  return new THREE.CanvasTexture(label);
 }
 
 // A medicine vial: clear glass, a little teal liquid with tiny bubbles, a wrap-around label, metal collar, teal cap.
@@ -60,20 +99,196 @@ function stage(canvas) {
 function makeVial() {
   const g = new THREE.Group(), V = (x, y) => new THREE.Vector2(x, y);
   const add = (geo, mat, y = 0, order = 0) => { const m = new THREE.Mesh(geo, mat); m.position.y = y - 2.050; m.renderOrder = order; g.add(m); return m; };
-  add(new THREE.CylinderGeometry(.93, .93, 1.900, 48), new THREE.MeshPhongMaterial({ color: cssColor('--accent-l'), transparent: true, opacity: .22, shininess: 80, depthWrite: false }), 1.050, 1);
-  add(new THREE.CylinderGeometry(1.065, 1.065, 1.250, 48, 1, true, -1.300, 2.600), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .6, side: THREE.DoubleSide }), 1.500);
+  add(new THREE.CylinderGeometry(.93, .93, 1.900, 48), new THREE.MeshPhongMaterial({ color: cssColor('--accent'), transparent: true, opacity: .46, shininess: 80, depthWrite: false }), 1.050, 1);
+  add(new THREE.CylinderGeometry(1.065, 1.065, 1.250, 48, 1, true, -1.300, 2.600), new THREE.MeshStandardMaterial({ map: vialLabel(), roughness: .58, side: THREE.DoubleSide }), 1.500);
+  const seal = new THREE.MeshStandardMaterial({ color: cssColor('--accent-d'), metalness: .2, roughness: .3 });
+  add(new THREE.TorusGeometry(.925, .022, 8, 48).rotateX(Math.PI / 2), seal, 2.0, 1);
   const bubM = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: .6, shininess: 140, depthWrite: false });
   const bubG = new THREE.SphereGeometry(1, 12, 10);
-  for (let i = 0; i < 22; i++) {
-    const a = Math.random() * 6.283, d = Math.random() * .8;
-    const b = add(bubG, bubM, .2 + Math.random() * 1.700, 1);
-    b.scale.setScalar(.022 + Math.random() * .045); b.position.x = Math.sin(a) * d; b.position.z = Math.cos(a) * d;
+  for (let i = 0; i < 12; i++) {
+    const a = i * 2.4, d = .35 + (i % 4) * .14;
+    const b = add(bubG, bubM, .24 + ((i * 7) % 12) * .14, 1);
+    b.scale.setScalar(.026 + (i % 3) * .014); b.position.x = Math.sin(a) * d; b.position.z = Math.cos(a) * d;
   }
   add(new THREE.LatheGeometry([V(0, 0), V(.95, 0), V(1.050, .1), V(1.050, 2.600), V(.9, 2.950), V(.55, 3.150), V(.55, 3.450), V(.68, 3.500), V(.68, 3.650)], 64),
-    new THREE.MeshPhongMaterial({ color: 0xe6eef0, transparent: true, opacity: .24, shininess: 170, specular: cssColor('--coral-ll'), side: THREE.DoubleSide, depthWrite: false }), 0, 2);
+    new THREE.MeshPhongMaterial({ color: 0xc1d4d5, transparent: true, opacity: .19, shininess: 170, specular: cssColor('--coral-ll'), side: THREE.DoubleSide, depthWrite: false }), 0, 2);
   add(new THREE.CylinderGeometry(.74, .74, .42, 48), new THREE.MeshStandardMaterial({ color: 0xd5dbe6, metalness: .6, roughness: .25 }), 3.620);
   add(new THREE.CylinderGeometry(.79, .79, .3, 48), new THREE.MeshStandardMaterial({ color: cssColor('--accent-d'), metalness: .35, roughness: .3 }), 3.960);
+  const foot = new THREE.MeshPhongMaterial({ color: 0x96b7b8, transparent: true, opacity: .54, depthWrite: false });
+  add(new THREE.TorusGeometry(.97, .043, 8, 48).rotateX(Math.PI / 2), foot, .10, 2);
+  add(new THREE.TorusGeometry(.744, .024, 8, 48).rotateX(Math.PI / 2), seal, 3.81);
   return g;
+}
+
+function makeHelix() {
+  const helix = new THREE.Group(), rods = [];
+  const tube = new THREE.CylinderGeometry(.3, .3, 3.600, 40, 1, true).rotateZ(Math.PI / 2);
+  const bore = new THREE.CylinderGeometry(.25, .25, 3.600, 40, 1, true).rotateZ(Math.PI / 2);
+  const lipG = new THREE.TorusGeometry(.275, .028, 10, 40).rotateY(Math.PI / 2);
+  const glass = new THREE.MeshPhongMaterial({ color: 0xf3f8f8, specular: 0xffffff, shininess: 150 });   // white glass tubes
+  const inside = new THREE.MeshPhongMaterial({ color: 0xc4b4b8, specular: 0xffffff, shininess: 60, side: THREE.BackSide });   // pink-grey bore, as in the video
+  const lip = new THREE.MeshPhongMaterial({ color: cssColor('--coral-l'), specular: 0xffffff, shininess: 90 });   // pink rims
+  const strand = new THREE.MeshPhongMaterial({ color: cssColor('--accent-l'), specular: 0xffffff, shininess: 90 });
+  for (let i = -7; i <= 7; i++) {
+    const t = new THREE.Group();
+    t.add(new THREE.Mesh(tube, glass), new THREE.Mesh(bore, inside));
+    [-1.800, 1.800].forEach(x => { const l = new THREE.Mesh(lipG, lip); l.position.x = x; t.add(l); });
+    t.position.y = i * .6; helix.add(t); rods.push(t);
+  }
+  helix.scale.setScalar(.80); helix.rotation.order = 'ZYX';   // spin about its own axis first, then tilt
+  // One instanced mesh connects both ends of successive rungs into two fine strands.
+  const links = new THREE.InstancedMesh(new THREE.CylinderGeometry(.075, .075, 1, 10), strand, (rods.length - 1) * 2);
+  helix.add(links);
+  const link = new THREE.Object3D(), start = new THREE.Vector3(), end = new THREE.Vector3();
+  const up = new THREE.Vector3(0, 1, 0), direction = new THREE.Vector3();
+  let previousTwist;
+  function twist(angle) {
+    if (angle === previousTwist) return;
+    previousTwist = angle;
+    rods.forEach((rod, i) => { rod.rotation.y = (i - 7) * angle; });
+    for (let i = 0; i < rods.length - 1; i++) {
+      for (let side = 0; side < 2; side++) {
+        const x = side ? 1.72 : -1.72;
+        start.set(x, 0, 0).applyQuaternion(rods[i].quaternion).add(rods[i].position);
+        end.set(x, 0, 0).applyQuaternion(rods[i+1].quaternion).add(rods[i+1].position);
+        direction.subVectors(end, start);
+        link.scale.y = direction.length();
+        link.quaternion.setFromUnitVectors(up, direction.normalize());
+        link.position.lerpVectors(start, end, .5);
+        link.updateMatrix();
+        links.setMatrixAt(2 * i + side, link.matrix);
+      }
+    }
+    links.instanceMatrix.needsUpdate = true;
+  }
+  return { helix, twist };
+}
+
+// Pipeline: a rack of six glass test tubes, one per programme, filled to different levels.
+// The levels are decorative, not a stage chart.
+function makePipeline() {
+  const group = new THREE.Group();
+  const glass = new THREE.MeshPhongMaterial({ color: 0xe6eef0, transparent: true, opacity: .3, shininess: 170, specular: cssColor('--coral-ll'), side: THREE.DoubleSide, depthWrite: false });
+  const liquid = new THREE.MeshPhongMaterial({ color: cssColor('--accent-d'), transparent: true, opacity: .82, shininess: 60, depthWrite: false });
+  const surface = new THREE.MeshPhongMaterial({ color: cssColor('--accent-l'), shininess: 120 });
+  const lip = new THREE.MeshPhongMaterial({ color: cssColor('--coral-l'), specular: 0xffffff, shininess: 90 });
+  const metal = new THREE.MeshStandardMaterial({ color: 0xc6d4d5, metalness: .3, roughness: .3 });
+  const cap = new THREE.MeshStandardMaterial({ color: cssColor('--accent-d'), metalness: .35, roughness: .3 });
+  const R = .26, H = 2.900, r = .225;
+  const wall = new THREE.CylinderGeometry(R, R, H, 40, 1, true);
+  const bottom = new THREE.SphereGeometry(R, 40, 16, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+  const fluid = new THREE.CylinderGeometry(r, r, 1, 40);
+  const fluidEnd = new THREE.SphereGeometry(r, 40, 16, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+  const top = new THREE.CircleGeometry(r, 40).rotateX(-Math.PI / 2);
+  const rimG = new THREE.TorusGeometry(R + .012, .03, 10, 40).rotateX(Math.PI / 2);
+  const capG = new THREE.CylinderGeometry(R + .045, R + .045, .34, 40);
+  const levels = [.42, .66, .86, .58, .34, .24], capped = [false, true, false, false, true, false];
+  levels.forEach((level, i) => {
+    const t = new THREE.Group(), x = (i - 2.500) * .74;
+    const add = (geo, mat, y, order = 0) => { const m = new THREE.Mesh(geo, mat); m.position.y = y; m.renderOrder = order; t.add(m); return m; };
+    const h = level * (H - .3);
+    const col = add(fluid, liquid, h / 2, 1); col.scale.y = h;
+    add(fluidEnd, liquid, 0, 1);
+    add(top, surface, h + .002, 1);
+    add(wall, glass, H / 2, 2);
+    add(bottom, glass, 0, 2);
+    if (capped[i]) add(capG, cap, H + .1); else add(rimG, lip, H);
+    t.position.set(x, -1.450, 0);
+    group.add(t);
+  });
+  // Rack: a base, two rails the tubes pass through, and end posts.
+  const box = (w, h, d, y, z = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), metal); m.position.set(0, y, z); group.add(m); };
+  box(4.900, .12, 1.100, -1.700);
+  box(4.900, .07, .8, -.700);
+  box(4.900, .07, .8, .350);
+  [-2.400, 2.400].forEach(x => { const post = new THREE.Mesh(new THREE.BoxGeometry(.09, 2.150, .8), metal); post.position.set(x, -.600, 0); group.add(post); });
+  return group;
+}
+
+// Inline models track native scrolling. A poster remains visible until the first frame.
+function inlineScenes(compact) {
+  const containers = [...document.querySelectorAll(compact
+    ? '.intro-model, .know-art, .d-inner, .pipe-model' : '.pipe-model')];
+  const active = new Set(), models = new Map();
+  let frame = 0;
+  function render() {
+    frame = 0;
+    for (const host of active) {
+      let entry = models.get(host);
+      if (!entry) {
+        const canvas = host.querySelector('canvas');
+        let view;
+        try {
+          view = stage(canvas);
+        } catch {
+          visibility.unobserve(host);
+          active.delete(host);
+          continue;
+        }
+        const pipe = host.matches('.pipe-model'), dna = host.matches('.d-inner');
+        const assembly = dna ? makeHelix() : null;
+        const object = pipe ? makePipeline() : dna ? assembly.helix : makeVial();
+        view.scene.add(object);
+        const lost = () => host.classList.remove('model-ready');
+        canvas.addEventListener('webglcontextlost', lost);
+        canvas.addEventListener('webglcontextrestored', schedule);
+        entry = { view, object, pipe, assembly, canvas, lost };
+        models.set(host, entry);
+      }
+      const { view, object, pipe, assembly } = entry;
+      const rect = host.getBoundingClientRect();
+      const progress = Math.max(0, Math.min(1, (innerHeight - rect.top) / (innerHeight + rect.height)));
+      if (assembly) {
+        assembly.twist(.32);
+        object.rotation.set(.04, .3 + progress * 1.25, -.36);
+        object.scale.setScalar(.68);
+      } else if (pipe) {
+        object.rotation.set(.22, -.62 + progress * .5, 0);
+        object.scale.setScalar(.98);
+      } else {
+        object.rotation.set(.08, -.34 + progress * .65, host.matches('.intro-model') ? -.32 : .23);
+        object.scale.setScalar(1.28);
+      }
+      host.classList.toggle('model-ready', !!view.draw());
+    }
+  }
+  function schedule() {
+    if (active.size && !frame) frame = requestAnimationFrame(render);
+  }
+  const visibility = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) active.add(entry.target);
+      else active.delete(entry.target);
+    }
+    schedule();
+  });
+  const sizes = new ResizeObserver(schedule);
+  containers.forEach(host => { visibility.observe(host); sizes.observe(host); });
+  addEventListener('scroll', schedule, { passive: true });
+  return () => {
+    cancelAnimationFrame(frame);
+    visibility.disconnect(); sizes.disconnect();
+    removeEventListener('scroll', schedule);
+    models.forEach(({ view, canvas, lost }, host) => {
+      canvas.removeEventListener('webglcontextlost', lost);
+      canvas.removeEventListener('webglcontextrestored', schedule);
+      host.classList.remove('model-ready');
+      view.kill();
+    });
+  };
+}
+
+if (GL) {
+  const compact = matchMedia('(max-width: 899px), (max-height: 599px)');
+  const motion = matchMedia('(prefers-reduced-motion: no-preference)');
+  let cleanup;
+  function configureInlineModels() {
+    cleanup?.();
+    cleanup = motion.matches ? inlineScenes(compact.matches) : null;
+  }
+  compact.addEventListener('change', configureInlineModels);
+  motion.addEventListener('change', configureInlineModels);
+  configureInlineModels();
 }
 
 // Everything below is enhancement: the page is complete and readable without it.
@@ -83,25 +298,35 @@ if (window.gsap && window.ScrollTrigger) {
   const SCRUB = .5;   // seconds a scrubbed animation trails the scroll; Lenis adds the glide on top
 
   // Smooth, inertial scrolling (Lenis) driven by GSAP's ticker so pinned scenes move in step with the page.
-  if (window.Lenis && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  const mm = gsap.matchMedia();
+  mm.add('(min-width: 900px) and (min-height: 600px) and (pointer: fine) and (prefers-reduced-motion: no-preference)', () => {
+    if (!window.Lenis) return;
     lenis = new Lenis({ lerp: .085, wheelMultiplier: .9 });
     lenis.on('scroll', ScrollTrigger.update);
-    gsap.ticker.add(t => lenis.raf(t * 1000));
+    const tick = time => lenis.raf(time * 1000);
+    gsap.ticker.add(tick);
     gsap.ticker.lagSmoothing(0);
-    document.querySelectorAll('a[href^="#"]').forEach(a => a.addEventListener('click', e => {
-      const id = a.getAttribute('href'), t = id.length > 1 && id !== '#contact' && document.querySelector(id);
-      if (!t) return;
-      e.preventDefault();
-      lenis.scrollTo(t, { offset: -(parseFloat(getComputedStyle(t).scrollMarginTop) || 0), duration: 1.6 });
-    }));
-  }
+    const followAnchor = event => {
+      const anchor = event.target.closest('a[href^="#"]');
+      const id = anchor?.getAttribute('href');
+      if (!id || id === '#' || id === '#contact') return;
+      const target = document.getElementById(id.slice(1));
+      if (!target) return;
+      event.preventDefault();
+      lenis.scrollTo(target, { offset: -(parseFloat(getComputedStyle(target).scrollMarginTop) || 0), duration: 1.6 });
+    };
+    document.addEventListener('click', followAnchor);
+    return () => {
+      document.removeEventListener('click', followAnchor);
+      gsap.ticker.remove(tick);
+      lenis.destroy(); lenis = null;
+    };
+  });
 
   // Split [data-split] paragraphs into words for the scroll-driven reveal.
   document.querySelectorAll('[data-split]').forEach(p => {
     p.innerHTML = p.textContent.trim().split(/\s+/).map(w => `<span class="w">${w}</span>`).join(' ');
   });
-
-  const mm = gsap.matchMedia();
 
   mm.add('(prefers-reduced-motion: no-preference)', () => {
     // Items entering together (cards, table rows) glide in one after another.
@@ -115,7 +340,7 @@ if (window.gsap && window.ScrollTrigger) {
   });
 
   // Pinned, scrubbed sections: desktop only.
-  mm.add('(prefers-reduced-motion: no-preference) and (min-width: 900px)', () => {
+  mm.add('(prefers-reduced-motion: no-preference) and (min-width: 900px) and (min-height: 600px)', () => {
     const root = document.documentElement;
     root.classList.add('motion');
     root.classList.toggle('gl', GL);
@@ -155,8 +380,8 @@ if (window.gsap && window.ScrollTrigger) {
       heroStage.draw();
     };
     gsap.set('.hero-white', { clipPath: 'inset(100% 0% 0% 0%)' });
-    heroTl = gsap.timeline({ defaults: { ease: 'power2.inOut' }, scrollTrigger: {
-      trigger: '.hero-pin', start: 'top top', end: '+=540%', pin: true, scrub: SCRUB, onUpdate: renderHero, onRefresh: renderHero
+    heroTl = gsap.timeline({ defaults: { ease: 'power2.inOut' }, onUpdate: renderHero, scrollTrigger: {
+      trigger: '.hero-pin', start: 'top top', end: '+=540%', pin: true, scrub: SCRUB, onRefresh: renderHero
     } })
       .to('.hero-intro', { yPercent: -100, ease: 'none', duration: .16 }, 0)
       .fromTo('.statement', { y: '22vh' }, { y: 0, ease: 'none', duration: .16 }, 0)
@@ -193,7 +418,7 @@ if (window.gsap && window.ScrollTrigger) {
       knowCv.style.filter = k.blur > .3 ? `blur(${k.blur}px)` : 'none';
       knowStage.draw();
     };
-    gsap.timeline({ scrollTrigger: { trigger: '.know-pin', start: 'top top', end: '+=200%', pin: true, scrub: SCRUB, onUpdate: renderKnow, onRefresh: renderKnow } })
+    gsap.timeline({ onUpdate: renderKnow, scrollTrigger: { trigger: '.know-pin', start: 'top top', end: '+=200%', pin: true, scrub: SCRUB, onRefresh: renderKnow } })
       .to(k, { blur: 0, ry: 0, duration: .3 }, 0)
       .from('.s1 .know-label', { scale: 2.400, duration: .2, ease: 'power2.inOut' }, 0)   // video 9-10 s: big "We know" settles to its label size
       .from('.s1 .w', { opacity: .12, stagger: .02, duration: .05 }, .14)
@@ -206,23 +431,11 @@ if (window.gsap && window.ScrollTrigger) {
       .to({}, { duration: .1 });
 
     // ===== Key pillars: scroll picks the active pillar, draws the ring, and twists a 3D helix of rods. =====
-    let helixStage, rods = [], helix;
+    let helixStage, twist, helix;
     if (GL) {
       helixStage = mk('.helix');
-      helix = new THREE.Group(); helixStage.scene.add(helix);
-      const tube = new THREE.CylinderGeometry(.3, .3, 3.600, 40, 1, true).rotateZ(Math.PI / 2);
-      const bore = new THREE.CylinderGeometry(.25, .25, 3.600, 40, 1, true).rotateZ(Math.PI / 2);
-      const lipG = new THREE.TorusGeometry(.275, .028, 10, 40).rotateY(Math.PI / 2);
-      const glass = new THREE.MeshPhongMaterial({ color: 0xf3f8f8, specular: 0xffffff, shininess: 150 });
-      const inside = new THREE.MeshPhongMaterial({ color: 0xc4b4b8, specular: 0xffffff, shininess: 60, side: THREE.BackSide });   // pink-grey bore, as in the video
-      const lip = new THREE.MeshPhongMaterial({ color: cssColor('--coral-l'), specular: 0xffffff, shininess: 90 });
-      for (let i = -7; i <= 7; i++) {
-        const t = new THREE.Group();
-        t.add(new THREE.Mesh(tube, glass), new THREE.Mesh(bore, inside));
-        [-1.800, 1.800].forEach(x => { const l = new THREE.Mesh(lipG, lip); l.position.x = x; t.add(l); });
-        t.position.y = i * .6; helix.add(t); rods.push(t);
-      }
-      helix.scale.setScalar(.95); helix.rotation.order = 'ZYX';   // spin about its own axis first, then tilt
+      ({ helix, twist } = makeHelix());
+      helixStage.scene.add(helix);
     }
     const sets = ['.p-item', '.p-tabs li', '.p-stat', '.dots i'].map(q => [...document.querySelectorAll(q)]);
     const arc = document.querySelector('.ring .arc');
@@ -232,7 +445,7 @@ if (window.gsap && window.ScrollTrigger) {
       arc.style.strokeDashoffset = 1 - p;
       if (GL) {
         const tw = .08 + .22 * (.5 - .5 * Math.cos(p * Math.PI * 3));   // twist breathes three times across the section
-        rods.forEach((rod, n) => rod.rotation.y = (n - 7) * tw);
+        twist(tw);
         helix.rotation.set(0, p * 5, .85 - p * 1.700);
         helixStage.draw();
       }
@@ -245,6 +458,8 @@ if (window.gsap && window.ScrollTrigger) {
 
     return () => {
       root.classList.remove('motion', 'gl');
+      heroSec.dataset.theme = 'dark';
+      syncHeader();
       bubs.innerHTML = '';
       [dia, A, B, vialCv, knowCv].forEach(el => el.removeAttribute('style'));
       gsap.set('.hero-intro, .statement, .hero-white, .hw-panel, .hero-what, .hero-stats, .hero-lens, .orbs', { clearProps: 'all' });
