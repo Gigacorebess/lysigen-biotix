@@ -298,10 +298,7 @@ td i{display:inline-block;width:8px;height:8px;margin-right:12px;border-radius:5
 .partner p{margin:28px 0 34px;font-weight:500;line-height:1.5}
 .partner .tube{margin-top:auto;padding-top:50px;position:relative;z-index:1}
 
-/* ---------- bleed + footer ---------- */
-.bleed{position:relative}
-.bleed img{width:100%;height:min(88vh,60vw);object-fit:cover}
-.tag{position:absolute;right:var(--pad);bottom:16px;padding:5px 10px;border-radius:999px;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#fff;background:rgba(var(--ink-rgb),.55)}
+/* ---------- footer ---------- */
 .foot{background:var(--char-800);color:#fff;display:grid;grid-template-columns:1fr 1fr;padding:64px var(--pad) 30px;gap:4vw}
 .foot-art{display:flex;gap:14px;align-self:end}
 .foot-art .glass-sq,.glass-c{width:min(190px,22vw);aspect-ratio:1}
