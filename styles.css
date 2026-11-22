@@ -1,5 +1,4 @@
-/* Palettes: A (default) = deep teal, mist and coral (from the reference video), B = Precisio Biotix navy + coral,
-   C = original charcoal + coral. Picked with ?option=a|b|c (inline script in index.html).
+/* Palette: deep teal, mist and coral (from the reference video).
    --coral = buttons and dots, --accent = rings, icons and 3D liquid, --glow-* = light end of the hero gradient. */
 :root{
   --char-900:#003031; --char-800:#024d4c; --char-700:#005352; --char-600:#0b4644; --char-500:#397174; --char-400:#59939b;
@@ -11,23 +10,6 @@
   --serif:"Fraunces",Georgia,serif; --sans:"DM Sans",system-ui,sans-serif;
   --pad:clamp(16px,2.2vw,28px);
 }
-:root[data-palette=b]{
-  --char-900:#0b1e3d; --char-800:#0e2447; --char-700:#0b1e3d; --char-600:#2d3a55; --char-500:#2d4a6e; --char-400:#3e5c80;
-  --ink:#0b1e3d; --ink-rgb:11,30,61; --deep-rgb:11,30,61; --char-600-rgb:45,58,85; --muted:#64748b;
-  --coral:#ff4b32; --coral-d:#e63a22; --coral-dd:#b32a17; --coral-m:#ff6a4f; --coral-l:#ff8a75; --coral-ll:#ffd9d2;
-  --accent:#ff4b32; --accent-d:#e63a22; --accent-l:#ff8a75; --glow-1:#929da7; --glow-2:#d6dfea;
-  --tint:#e2e8f0; --mist:#eef2f7; --mint:#e2e8f0; --paper:#f7fafc; --line:#d6dfea;
-}
-:root[data-palette=c]{
-  --char-900:#17191c; --char-800:#1f2227; --char-700:#17191c; --char-600:#3a4048; --char-500:#4a525a; --char-400:#5d666e;
-  --ink:#17191c; --ink-rgb:23,25,28; --deep-rgb:23,25,28; --char-600-rgb:58,64,72; --muted:#68727b;
-  --coral:#ff4b32; --coral-d:#e63a22; --coral-dd:#b32a17; --coral-m:#ff6a4f; --coral-l:#ff8a75; --coral-ll:#ffd9d2;
-  --accent:#ff4b32; --accent-d:#e63a22; --accent-l:#ff8a75; --glow-1:#929da7; --glow-2:#ff6a4f;
-  --tint:#e3e7ea; --mist:#eef0f2; --mint:#e3e7ea; --paper:#fcfcfd; --line:#dfe3e7;
-}
-.palette{position:fixed;left:16px;bottom:16px;z-index:60;display:flex;gap:4px;padding:4px;border-radius:999px;background:#fff;box-shadow:0 6px 24px rgba(var(--ink-rgb),.2);font-size:13px}
-.palette a{padding:6px 12px;border-radius:999px}
-.palette a[aria-current]{background:var(--ink);color:#fff}
 *{box-sizing:border-box;margin:0}
 html{scroll-behavior:smooth}
 html.lenis,html.lenis body{height:auto}
@@ -308,7 +290,6 @@ td i{display:inline-block;width:8px;height:8px;margin-right:12px;border-radius:5
 .foot-main>p:not(.copy){margin-top:12px;line-height:1.5;color:rgba(255,255,255,.7)}
 .offices{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px 24px;margin-top:12px;line-height:1.5;color:rgba(255,255,255,.7)}
 .offices b{color:#fff;font-weight:500}
-:root:not([data-review]) .palette{display:none}
 .foot-links{display:grid;grid-template-columns:auto 1fr;gap:20px 6vw;margin:40px 0;padding:34px 0 80px;border:1px solid rgba(255,255,255,.14);border-width:1px 0}
 .big li{font-size:19px;font-weight:500;padding:6px 0}
 .foot a:hover{opacity:.7}

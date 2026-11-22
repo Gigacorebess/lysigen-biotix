@@ -471,6 +471,3 @@ if (window.gsap && window.ScrollTrigger) {
   ScrollTrigger.sort();
   ScrollTrigger.refresh();
 }
-
-// Design-option switcher (only shown when the URL has ?option=).
-document.querySelector(`.palette a[href="?option=${document.documentElement.dataset.palette}"]`)?.setAttribute('aria-current', 'true');
